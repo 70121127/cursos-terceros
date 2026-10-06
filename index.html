@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Registro de Participantes</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header><div class="wrap"><h1 id="titulo">Cursos Terceros</h1><a href="admin.html">Administrador</a></div></header>
+<main>
+  <section class="card">
+    <h2>Registro de participante</h2>
+    <p class="sub">Completa tus datos. Luego entrega tus documentos en físico en la oficina; ahí se marcará como <b>recibido</b>.</p>
+    <form id="form" novalidate>
+      <label for="dni">DNI</label>
+      <input id="dni" inputmode="numeric" maxlength="8" placeholder="8 dígitos" required>
+      <label for="nombre">Nombres y apellidos</label>
+      <input id="nombre" maxlength="150" placeholder="Ej. Juan Pérez García" required>
+      <label for="empresa">Empresa</label>
+      <input id="empresa" maxlength="150" placeholder="Nombre de tu empresa" required>
+      <button class="full" id="btn" type="submit">Registrar</button>
+    </form>
+    <div id="msg" class="msg"></div>
+  </section>
+
+  <section class="card">
+    <h2>Consultar estado</h2>
+    <p class="sub">¿Ya recibieron tus documentos? Ingresa tu DNI.</p>
+    <form id="fconsulta" novalidate>
+      <input id="dniConsulta" inputmode="numeric" maxlength="8" placeholder="DNI">
+      <button class="full ghost" type="submit">Consultar</button>
+    </form>
+    <div id="msgConsulta" class="msg"></div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+  const cfg = window.APP_CONFIG;
+  document.getElementById('titulo').textContent = cfg.NOMBRE_INSTITUCION;
+  const sb = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+  const $ = id => document.getElementById(id);
+  const show = (el, type, html) => { el.className = 'msg show ' + type; el.innerHTML = html; };
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const soloNum = e => e.target.value = e.target.value.replace(/\D/g, '');
+  $('dni').addEventListener('input', soloNum);
+  $('dniConsulta').addEventListener('input', soloNum);
+
+  $('form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const dni = $('dni').value.trim();
+    const nombre = $('nombre').value.trim().replace(/\s+/g, ' ');
+    const empresa = $('empresa').value.trim().replace(/\s+/g, ' ');
+    if (!/^\d{8}$/.test(dni)) return show($('msg'), 'err', 'El DNI debe tener 8 dígitos.');
+    if (nombre.length < 3) return show($('msg'), 'err', 'Ingresa tu nombre completo.');
+    if (empresa.length < 2) return show($('msg'), 'err', 'Ingresa el nombre de tu empresa.');
+
+    $('btn').disabled = true; $('btn').textContent = 'Enviando...';
+    const { error } = await sb.from('registros').insert({ dni, nombre: nombre.toUpperCase(), empresa: empresa.toUpperCase() });
+    $('btn').disabled = false; $('btn').textContent = 'Registrar';
+
+    if (error) return show($('msg'), 'err', 'No se pudo registrar. Intenta de nuevo.<br><span class="muted">' + esc(error.message) + '</span>');
+    show($('msg'), 'ok', '<b>¡Registro exitoso!</b><br>DNI ' + esc(dni) + ' — ' + esc(nombre.toUpperCase()) + '.<br>Ahora entrega tus documentos en físico en la oficina.');
+    $('form').reset();
+  });
+
+  $('fconsulta').addEventListener('submit', async e => {
+    e.preventDefault();
+    const dni = $('dniConsulta').value.trim();
+    if (!/^\d{8}$/.test(dni)) return show($('msgConsulta'), 'err', 'El DNI debe tener 8 dígitos.');
+    const { data, error } = await sb.rpc('consultar_estado', { p_dni: dni });
+    if (error) return show($('msgConsulta'), 'err', 'Error al consultar.');
+    if (!data.length) return show($('msgConsulta'), 'warn', 'No hay registros con ese DNI.');
+    show($('msgConsulta'), data[0].recibido ? 'ok' : 'warn', data.map(r =>
+      `<b>${esc(r.nombre)}</b> (${esc(r.empresa)})<br>` +
+      (r.recibido
+        ? `✔ Documentos RECIBIDOS el ${new Date(r.recibido_en).toLocaleString('es-PE')}`
+        : `⏳ PENDIENTE de entrega en oficina (registrado el ${new Date(r.creado_en).toLocaleDateString('es-PE')})`)
+    ).join('<hr class="divider">'));
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Panel Administrador</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header><div class="wrap"><h1 id="titulo">Panel Administrador</h1><a href="index.html">Ir al registro</a></div></header>
+<main>
+  <!-- LOGIN -->
+  <section class="card" id="vLogin">
+    <h2>Ingreso de administrador</h2>
+    <p class="sub">Usa el correo y contraseña creados en Supabase.</p>
+    <form id="fLogin">
+      <label for="email">Correo</label>
+      <input id="email" type="email" autocomplete="username" required>
+      <label for="pass">Contraseña</label>
+      <input id="pass" type="password" autocomplete="current-password" required>
+      <button class="full" id="btnLogin" type="submit">Ingresar</button>
+    </form>
+    <div id="msgLogin" class="msg"></div>
+  </section>
+
+  <!-- PANEL -->
+  <section class="card wide hidden" id="vPanel">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+      <div><h2>Recepción de documentos</h2><span class="muted" id="quien"></span></div>
+      <div style="display:flex;gap:8px">
+        <button class="ghost small" id="btnCsv">Exportar Excel (CSV)</button>
+        <button class="ghost small" id="btnSalir">Cerrar sesión</button>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><b id="sTotal">0</b><span>Registrados</span></div>
+      <div class="stat"><b id="sPend">0</b><span>Pendientes</span></div>
+      <div class="stat"><b id="sRec">0</b><span>Recibidos</span></div>
+    </div>
+    <div class="toolbar">
+      <input id="buscar" placeholder="Buscar por DNI, nombre o empresa...">
+      <select id="filtro">
+        <option value="todos">Todos</option>
+        <option value="pend" selected>Pendientes</option>
+        <option value="rec">Recibidos</option>
+      </select>
+      <button class="ghost small" id="btnRefrescar">Actualizar</button>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>DNI</th><th>Nombre</th><th>Empresa</th><th>Registrado</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <p class="muted" id="vacio" style="text-align:center;padding:20px">Sin registros.</p>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+  const cfg = window.APP_CONFIG;
+  const sb = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const fecha = d => d ? new Date(d).toLocaleString('es-PE', {dateStyle:'short', timeStyle:'short'}) : '';
+  let datos = [], usuario = null;
+
+  async function init() {
+    const { data } = await sb.auth.getSession();
+    data.session ? entrar(data.session.user) : null;
+  }
+
+  function entrar(user) {
+    usuario = user;
+    $('vLogin').classList.add('hidden');
+    $('vPanel').classList.remove('hidden');
+    $('quien').textContent = 'Sesión: ' + user.email;
+    cargar();
+  }
+
+  $('fLogin').addEventListener('submit', async e => {
+    e.preventDefault();
+    $('btnLogin').disabled = true;
+    const { data, error } = await sb.auth.signInWithPassword({ email: $('email').value.trim(), password: $('pass').value });
+    $('btnLogin').disabled = false;
+    if (error) { $('msgLogin').className = 'msg show err'; $('msgLogin').textContent = 'Correo o contraseña incorrectos.'; return; }
+    entrar(data.user);
+  });
+
+  $('btnSalir').onclick = async () => { await sb.auth.signOut(); location.reload(); };
+  $('btnRefrescar').onclick = cargar;
+  $('buscar').oninput = pintar;
+  $('filtro').onchange = pintar;
+
+  async function cargar() {
+    const { data, error } = await sb.from('registros').select('*').order('creado_en', { ascending: false });
+    if (error) { alertaTabla('Error al cargar: ' + error.message); return; }
+    datos = data; pintar();
+  }
+
+  function alertaTabla(t) { $('tbody').innerHTML = ''; $('vacio').textContent = t; $('vacio').classList.remove('hidden'); }
+
+  function pintar() {
+    const q = $('buscar').value.trim().toUpperCase();
+    const f = $('filtro').value;
+    const rec = datos.filter(r => r.recibido).length;
+    $('sTotal').textContent = datos.length; $('sRec').textContent = rec; $('sPend').textContent = datos.length - rec;
+
+    const lista = datos.filter(r =>
+      (f === 'todos' || (f === 'rec' ? r.recibido : !r.recibido)) &&
+      (!q || r.dni.includes(q) || r.nombre.toUpperCase().includes(q) || r.empresa.toUpperCase().includes(q)));
+
+    $('vacio').textContent = 'Sin registros.';
+    $('vacio').classList.toggle('hidden', lista.length > 0);
+    $('tbody').innerHTML = lista.map(r => `
+      <tr>
+        <td><b>${esc(r.dni)}</b></td>
+        <td>${esc(r.nombre)}</td>
+        <td>${esc(r.empresa)}</td>
+        <td class="muted">${fecha(r.creado_en)}</td>
+        <td>${r.recibido
+          ? `<span class="badge ok">Recibido</span><div class="muted">${fecha(r.recibido_en)}</div>`
+          : `<span class="badge warn">Pendiente</span>`}</td>
+        <td class="actions">${r.recibido
+          ? `<button class="ghost small" onclick="marcar(${r.id}, false)">Deshacer</button>`
+          : `<button class="ok small" onclick="marcar(${r.id}, true)">✔ Dar recibido</button>`}</td>
+      </tr>`).join('');
+  }
+
+  async function marcar(id, valor) {
+    const cambios = valor
+      ? { recibido: true, recibido_en: new Date().toISOString(), recibido_por: usuario.email }
+      : { recibido: false, recibido_en: null, recibido_por: null };
+    const { error } = await sb.from('registros').update(cambios).eq('id', id);
+    if (error) { alert('No se pudo actualizar: ' + error.message); return; }
+    Object.assign(datos.find(r => r.id === id), cambios);
+    pintar();
+  }
+
+  $('btnCsv').onclick = () => {
+    const filas = [['DNI','NOMBRE','EMPRESA','REGISTRADO','ESTADO','RECIBIDO_EN','RECIBIDO_POR']]
+      .concat(datos.map(r => [r.dni, r.nombre, r.empresa, fecha(r.creado_en), r.recibido ? 'RECIBIDO' : 'PENDIENTE', fecha(r.recibido_en), r.recibido_por || '']));
+    const csv = '﻿' + filas.map(f => f.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'registros_' + new Date().toISOString().slice(0,10) + '.csv';
+    a.click();
+  };
+
+  init();
+</script>
+</body>
+</html>
