@@ -3,35 +3,63 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Registro de Participantes</title>
+  <title>Control de Cursos</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header><div class="wrap"><h1 id="titulo">Cursos Terceros</h1><a href="admin.html">Administrador</a></div></header>
+<header><div class="wrap">
+  <div class="titles"><h1>CONTROL DE CURSOS</h1><small>Herramientas de poder y Equipos de poder</small></div>
+  <a href="admin.html">Administrador</a>
+</div></header>
 <main>
-  <section class="card">
-    <h2>Registro de participante</h2>
-    <p class="sub">Completa tus datos. Luego entrega tus documentos en físico en la oficina; ahí se marcará como <b>recibido</b>.</p>
-    <form id="form" novalidate>
+  <!-- PASO 1: DNI del capacitador -->
+  <section class="card" id="vDni">
+    <h2>Ingreso de capacitador</h2>
+    <p class="sub">Ingresa tu DNI. Solo el personal autorizado puede registrar cursos.</p>
+    <form id="fDni" novalidate>
       <label for="dni">DNI</label>
-      <input id="dni" inputmode="numeric" maxlength="8" placeholder="8 dígitos" required>
-      <label for="nombre">Nombres y apellidos</label>
-      <input id="nombre" maxlength="150" placeholder="Ej. Juan Pérez García" required>
-      <label for="empresa">Empresa</label>
-      <input id="empresa" maxlength="150" placeholder="Nombre de tu empresa" required>
-      <button class="full" id="btn" type="submit">Registrar</button>
+      <input id="dni" inputmode="numeric" maxlength="8" placeholder="8 dígitos" autocomplete="off">
+      <button class="full" id="btnDni" type="submit">Continuar</button>
     </form>
-    <div id="msg" class="msg"></div>
+    <div id="msgDni" class="msg"></div>
   </section>
 
-  <section class="card">
-    <h2>Consultar estado</h2>
-    <p class="sub">¿Ya recibieron tus documentos? Ingresa tu DNI.</p>
-    <form id="fconsulta" novalidate>
-      <input id="dniConsulta" inputmode="numeric" maxlength="8" placeholder="DNI">
-      <button class="full ghost" type="submit">Consultar</button>
+  <!-- PASO 2: Registro del curso -->
+  <section class="card hidden" id="vCurso" style="max-width:640px">
+    <div class="who">
+      <div><span class="muted">Capacitador</span><br><b id="capNombre"></b> <span class="muted" id="capDni"></span></div>
+      <button class="ghost small" id="btnSalir" type="button">Salir</button>
+    </div>
+    <form id="fCurso" novalidate>
+      <label for="curso">Curso dictado</label>
+      <select id="curso"><option value="">Cargando cursos...</option></select>
+
+      <div class="row2">
+        <div><label for="fecha">Fecha del curso</label><input id="fecha" type="date"></div>
+        <div><label for="cantidad">Cantidad de integrantes</label><input id="cantidad" type="number" min="1" max="100" inputmode="numeric" placeholder="Ej. 10"></div>
+      </div>
+
+      <div id="bloqueP" class="hidden">
+        <label>Participantes que pasaron el curso</label>
+        <div class="plist" id="plist"></div>
+      </div>
+
+      <label for="cert">Certificado de capacitador (PDF)</label>
+      <input id="cert" type="file" accept="application/pdf,.pdf">
+      <div class="hint">Solo PDF, máximo 5 MB.</div>
+
+      <button class="full" id="btnEnviar" type="submit">Registrar curso</button>
     </form>
-    <div id="msgConsulta" class="msg"></div>
+    <div id="msgCurso" class="msg"></div>
+  </section>
+
+  <!-- PASO 3: Confirmación -->
+  <section class="card hidden" id="vOk">
+    <h2>✔ Curso registrado</h2>
+    <div id="resumen" class="msg show ok"></div>
+    <p class="sub" style="margin-top:14px">Entrega la documentación en físico en la oficina; ahí se marcará como <b>recibido</b>.</p>
+    <button class="full" id="btnOtro" type="button">Registrar otro curso</button>
+    <button class="full ghost" id="btnFin" type="button" style="margin-top:10px">Terminar</button>
   </section>
 </main>
 
@@ -39,47 +67,99 @@
 <script src="config.js"></script>
 <script>
   const cfg = window.APP_CONFIG;
-  document.getElementById('titulo').textContent = cfg.NOMBRE_INSTITUCION;
-  const sb = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+  const sb = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, { auth: { persistSession: false } });
   const $ = id => document.getElementById(id);
-  const show = (el, type, html) => { el.className = 'msg show ' + type; el.innerHTML = html; };
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const soloNum = e => e.target.value = e.target.value.replace(/\D/g, '');
-  $('dni').addEventListener('input', soloNum);
-  $('dniConsulta').addEventListener('input', soloNum);
+  const show = (el, type, html) => { el.className = 'msg show ' + type; el.innerHTML = html; };
+  const hide = el => { el.className = 'msg'; el.innerHTML = ''; };
+  const vista = v => ['vDni','vCurso','vOk'].forEach(id => $(id).classList.toggle('hidden', id !== v));
+  const hoy = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
+  let cap = null;
 
-  $('form').addEventListener('submit', async e => {
+  document.addEventListener('input', e => { if (e.target.matches('#dni, .pdni')) e.target.value = e.target.value.replace(/\D/g, '').slice(0, 8); });
+
+  // ---- Paso 1 ----
+  $('fDni').addEventListener('submit', async e => {
     e.preventDefault();
     const dni = $('dni').value.trim();
-    const nombre = $('nombre').value.trim().replace(/\s+/g, ' ');
-    const empresa = $('empresa').value.trim().replace(/\s+/g, ' ');
-    if (!/^\d{8}$/.test(dni)) return show($('msg'), 'err', 'El DNI debe tener 8 dígitos.');
-    if (nombre.length < 3) return show($('msg'), 'err', 'Ingresa tu nombre completo.');
-    if (empresa.length < 2) return show($('msg'), 'err', 'Ingresa el nombre de tu empresa.');
-
-    $('btn').disabled = true; $('btn').textContent = 'Enviando...';
-    const { error } = await sb.from('registros').insert({ dni, nombre: nombre.toUpperCase(), empresa: empresa.toUpperCase() });
-    $('btn').disabled = false; $('btn').textContent = 'Registrar';
-
-    if (error) return show($('msg'), 'err', 'No se pudo registrar. Intenta de nuevo.<br><span class="muted">' + esc(error.message) + '</span>');
-    show($('msg'), 'ok', '<b>¡Registro exitoso!</b><br>DNI ' + esc(dni) + ' — ' + esc(nombre.toUpperCase()) + '.<br>Ahora entrega tus documentos en físico en la oficina.');
-    $('form').reset();
+    if (!/^\d{8}$/.test(dni)) return show($('msgDni'), 'err', 'El DNI debe tener 8 dígitos.');
+    $('btnDni').disabled = true; $('btnDni').textContent = 'Verificando...';
+    const { data, error } = await sb.rpc('verificar_capacitador', { p_dni: dni });
+    $('btnDni').disabled = false; $('btnDni').textContent = 'Continuar';
+    if (error) return show($('msgDni'), 'err', 'Error de conexión. Intenta de nuevo.');
+    if (!data.length) return show($('msgDni'), 'err', 'Este DNI <b>no está autorizado</b> para registrar cursos. Comunícate con la oficina.');
+    cap = { dni, nombre: data[0].nombre };
+    hide($('msgDni'));
+    abrirFormulario();
   });
 
-  $('fconsulta').addEventListener('submit', async e => {
+  async function abrirFormulario() {
+    $('capNombre').textContent = cap.nombre;
+    $('capDni').textContent = '· DNI ' + cap.dni;
+    $('fCurso').reset(); $('plist').innerHTML = ''; $('bloqueP').classList.add('hidden'); hide($('msgCurso'));
+    $('fecha').max = hoy(); $('fecha').value = hoy();
+    vista('vCurso');
+    const { data, error } = await sb.from('cursos').select('id,nombre').eq('activo', true).order('nombre');
+    if (error || !data.length) { $('curso').innerHTML = '<option value="">No hay cursos disponibles</option>'; return; }
+    $('curso').innerHTML = '<option value="">Selecciona el curso...</option>' + data.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+  }
+
+  // ---- Filas de participantes según la cantidad ----
+  $('cantidad').addEventListener('input', () => {
+    let n = parseInt($('cantidad').value, 10);
+    if (!(n >= 1)) { $('bloqueP').classList.add('hidden'); $('plist').innerHTML = ''; return; }
+    if (n > 100) { n = 100; $('cantidad').value = 100; }
+    const prev = [...$('plist').children].map(r => [r.querySelector('.pdni').value, r.querySelector('.pnom').value]);
+    $('plist').innerHTML = Array.from({ length: n }, (_, i) => `
+      <div class="prow"><span>${i + 1}.</span>
+        <input class="pdni" inputmode="numeric" maxlength="8" placeholder="DNI" value="${esc(prev[i]?.[0] || '')}">
+        <input class="pnom" maxlength="150" placeholder="Nombres y apellidos" value="${esc(prev[i]?.[1] || '')}">
+      </div>`).join('');
+    $('bloqueP').classList.remove('hidden');
+  });
+
+  // ---- Enviar ----
+  $('fCurso').addEventListener('submit', async e => {
     e.preventDefault();
-    const dni = $('dniConsulta').value.trim();
-    if (!/^\d{8}$/.test(dni)) return show($('msgConsulta'), 'err', 'El DNI debe tener 8 dígitos.');
-    const { data, error } = await sb.rpc('consultar_estado', { p_dni: dni });
-    if (error) return show($('msgConsulta'), 'err', 'Error al consultar.');
-    if (!data.length) return show($('msgConsulta'), 'warn', 'No hay registros con ese DNI.');
-    show($('msgConsulta'), data[0].recibido ? 'ok' : 'warn', data.map(r =>
-      `<b>${esc(r.nombre)}</b> (${esc(r.empresa)})<br>` +
-      (r.recibido
-        ? `✔ Documentos RECIBIDOS el ${new Date(r.recibido_en).toLocaleString('es-PE')}`
-        : `⏳ PENDIENTE de entrega en oficina (registrado el ${new Date(r.creado_en).toLocaleDateString('es-PE')})`)
-    ).join('<hr class="divider">'));
+    const m = $('msgCurso');
+    const cursoId = $('curso').value, fecha = $('fecha').value, file = $('cert').files[0];
+    const filas = [...$('plist').children].map(r => ({ dni: r.querySelector('.pdni').value.trim(), nombre: r.querySelector('.pnom').value.trim().replace(/\s+/g, ' ') }));
+
+    if (!cursoId) return show(m, 'err', 'Selecciona el curso.');
+    if (!fecha || fecha > hoy()) return show(m, 'err', 'Ingresa una fecha válida (no puede ser futura).');
+    if (!filas.length) return show(m, 'err', 'Ingresa la cantidad de integrantes.');
+    const malos = filas.map((p, i) => (!/^\d{8}$/.test(p.dni) || p.nombre.length < 3) ? i + 1 : 0).filter(Boolean);
+    if (malos.length) return show(m, 'err', 'Revisa los participantes: ' + malos.join(', ') + ' (DNI de 8 dígitos y nombre completo).');
+    const dnis = filas.map(p => p.dni);
+    const rep = dnis.filter((d, i) => dnis.indexOf(d) !== i);
+    if (rep.length) return show(m, 'err', 'DNI repetido en la lista: ' + [...new Set(rep)].join(', '));
+    if (!file) return show(m, 'err', 'Adjunta tu certificado de capacitador en PDF.');
+    if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) return show(m, 'err', 'El certificado debe ser un archivo PDF.');
+    if (file.size > 5 * 1024 * 1024) return show(m, 'err', 'El PDF pesa más de 5 MB.');
+
+    const btn = $('btnEnviar');
+    btn.disabled = true; btn.textContent = 'Subiendo certificado...';
+    const path = `cert/${cap.dni}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`;
+    const up = await sb.storage.from('certificados').upload(path, file, { contentType: 'application/pdf', upsert: false });
+    if (up.error) { btn.disabled = false; btn.textContent = 'Registrar curso'; return show(m, 'err', 'No se pudo subir el certificado: ' + esc(up.error.message)); }
+
+    btn.textContent = 'Guardando...';
+    const { data, error } = await sb.rpc('registrar_capacitacion', {
+      p_dni: cap.dni, p_curso_id: Number(cursoId), p_fecha: fecha,
+      p_participantes: filas.map(p => ({ dni: p.dni, nombre: p.nombre.toUpperCase() })), p_certificado: path
+    });
+    btn.disabled = false; btn.textContent = 'Registrar curso';
+    if (error) return show(m, 'err', 'No se pudo registrar: ' + esc(error.message));
+
+    const cursoTxt = $('curso').selectedOptions[0].textContent;
+    $('resumen').innerHTML = `<b>N° de registro: ${data}</b><br>Curso: ${esc(cursoTxt)}<br>Fecha: ${fecha.split('-').reverse().join('/')}<br>Integrantes: ${filas.length}<br>Capacitador: ${esc(cap.nombre)}`;
+    vista('vOk');
   });
+
+  const salir = () => { cap = null; $('fDni').reset(); vista('vDni'); $('dni').focus(); };
+  $('btnSalir').onclick = salir;
+  $('btnFin').onclick = salir;
+  $('btnOtro').onclick = abrirFormulario;
 </script>
 </body>
 </html>

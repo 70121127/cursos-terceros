@@ -1,12 +1,13 @@
-# Cursos Terceros — Registro y recepción de documentos
+# CONTROL DE CURSOS — Herramientas de poder y Equipos de poder
 
-- **index.html**: página pública. El tercero registra DNI, nombre y empresa, y puede consultar si ya le dieron "recibido".
-- **admin.html**: panel del administrador. Inicia sesión y da clic en **Dar recibido** cuando entreguen los documentos en físico. Permite buscar, filtrar y exportar a Excel (CSV).
-- **config.js**: conexión con la base de datos Supabase.
-- **supabase.sql**: estructura de la base de datos y reglas de seguridad (ya aplicado).
+- **index.html**: el capacitador ingresa su DNI. Si está autorizado, registra el curso dictado, la fecha, la cantidad de integrantes, el DNI y nombre de cada participante, y sube su certificado de capacitador (PDF).
+- **admin.html**: panel del administrador.
+  - *Cursos registrados*: ver cada registro, sus participantes y el PDF; dar **recibido** cuando entreguen la documentación física; exportar a Excel (CSV).
+  - *Capacitadores autorizados*: agregar, bloquear o autorizar DNIs.
+  - *Lista de cursos*: agregar u ocultar cursos.
+- **config.js**: conexión con Supabase.
+- **supabase.sql**: estructura de la base de datos, reglas de seguridad y almacenamiento de certificados (ya aplicado).
 
-Publicado en Netlify. Cada cambio en este repositorio actualiza la página automáticamente.
+Publicado en Netlify; cada cambio en este repositorio actualiza la página automáticamente.
 
-Para agregar otro administrador: Supabase > Authentication > Users > Add user.
-
-Nota: Supabase en plan gratis pausa el proyecto tras 7 días sin uso; se reactiva con un clic desde su panel.
+Nota: Supabase en plan gratis pausa el proyecto tras 7 días sin uso; se reactiva con "Restore" desde su panel.

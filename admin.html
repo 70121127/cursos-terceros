@@ -4,11 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex">
-  <title>Panel Administrador</title>
+  <title>Control de Cursos · Admin</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header><div class="wrap"><h1 id="titulo">Panel Administrador</h1><a href="index.html">Ir al registro</a></div></header>
+<header><div class="wrap">
+  <div class="titles"><h1>CONTROL DE CURSOS</h1><small>Herramientas de poder y Equipos de poder · Administrador</small></div>
+  <a href="index.html">Ir al registro</a>
+</div></header>
 <main>
   <!-- LOGIN -->
   <section class="card" id="vLogin">
@@ -26,34 +29,71 @@
 
   <!-- PANEL -->
   <section class="card wide hidden" id="vPanel">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-      <div><h2>Recepción de documentos</h2><span class="muted" id="quien"></span></div>
-      <div style="display:flex;gap:8px">
-        <button class="ghost small" id="btnCsv">Exportar Excel (CSV)</button>
-        <button class="ghost small" id="btnSalir">Cerrar sesión</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <span class="muted" id="quien"></span>
+      <button class="ghost small" id="btnSalir">Cerrar sesión</button>
+    </div>
+    <div class="tabs">
+      <button class="on" data-tab="tReg">Cursos registrados</button>
+      <button data-tab="tCap">Capacitadores autorizados</button>
+      <button data-tab="tCur">Lista de cursos</button>
+    </div>
+
+    <!-- TAB: Cursos registrados -->
+    <div id="tReg">
+      <div class="stats">
+        <div class="stat"><b id="sTotal">0</b><span>Cursos registrados</span></div>
+        <div class="stat"><b id="sPend">0</b><span>Pendientes</span></div>
+        <div class="stat"><b id="sRec">0</b><span>Recibidos</span></div>
+        <div class="stat"><b id="sPart">0</b><span>Personas capacitadas</span></div>
       </div>
+      <div class="toolbar">
+        <input id="buscar" placeholder="Buscar por curso, capacitador o DNI de participante...">
+        <select id="filtro">
+          <option value="todos">Todos</option>
+          <option value="pend" selected>Pendientes</option>
+          <option value="rec">Recibidos</option>
+        </select>
+        <button class="ghost small" id="btnCsv">Exportar Excel (CSV)</button>
+        <button class="ghost small" id="btnRefrescar">Actualizar</button>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>N°</th><th>Fecha</th><th>Curso</th><th>Capacitador</th><th>Integrantes</th><th>Certificado</th><th>Estado</th><th></th></tr></thead>
+          <tbody id="tbReg"></tbody>
+        </table>
+      </div>
+      <p class="muted hidden" id="vacioReg" style="text-align:center;padding:20px">Sin registros.</p>
     </div>
-    <div class="stats">
-      <div class="stat"><b id="sTotal">0</b><span>Registrados</span></div>
-      <div class="stat"><b id="sPend">0</b><span>Pendientes</span></div>
-      <div class="stat"><b id="sRec">0</b><span>Recibidos</span></div>
+
+    <!-- TAB: Capacitadores -->
+    <div id="tCap" class="hidden">
+      <p class="sub">Solo estos DNIs pueden ingresar a registrar cursos.</p>
+      <form class="addform" id="fCap" novalidate>
+        <input id="capDni" inputmode="numeric" maxlength="8" placeholder="DNI" style="max-width:150px">
+        <input id="capNom" maxlength="150" placeholder="Nombres y apellidos">
+        <button type="submit">Agregar</button>
+      </form>
+      <div id="msgCap" class="msg"></div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>DNI</th><th>Nombre</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tbCap"></tbody>
+      </table></div>
     </div>
-    <div class="toolbar">
-      <input id="buscar" placeholder="Buscar por DNI, nombre o empresa...">
-      <select id="filtro">
-        <option value="todos">Todos</option>
-        <option value="pend" selected>Pendientes</option>
-        <option value="rec">Recibidos</option>
-      </select>
-      <button class="ghost small" id="btnRefrescar">Actualizar</button>
+
+    <!-- TAB: Lista de cursos -->
+    <div id="tCur" class="hidden">
+      <p class="sub">Cursos que el capacitador puede elegir al registrar.</p>
+      <form class="addform" id="fCur" novalidate>
+        <input id="curNom" maxlength="150" placeholder="Nombre del curso (ej. Uso seguro de amoladora)">
+        <button type="submit">Agregar</button>
+      </form>
+      <div id="msgCur" class="msg"></div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Curso</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tbCur"></tbody>
+      </table></div>
     </div>
-    <div class="tablewrap">
-      <table>
-        <thead><tr><th>DNI</th><th>Nombre</th><th>Empresa</th><th>Registrado</th><th>Estado</th><th></th></tr></thead>
-        <tbody id="tbody"></tbody>
-      </table>
-    </div>
-    <p class="muted" id="vacio" style="text-align:center;padding:20px">Sin registros.</p>
   </section>
 </main>
 
@@ -64,92 +104,166 @@
   const sb = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const fecha = d => d ? new Date(d).toLocaleString('es-PE', {dateStyle:'short', timeStyle:'short'}) : '';
-  let datos = [], usuario = null;
+  const show = (el, type, html) => { el.className = 'msg show ' + type; el.innerHTML = html; };
+  const fechaHora = d => d ? new Date(d).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' }) : '';
+  const fechaD = d => d ? d.split('-').reverse().join('/') : '';
+  let regs = [], caps = [], curs = [], usuario = null, abiertos = new Set();
 
-  async function init() {
-    const { data } = await sb.auth.getSession();
-    data.session ? entrar(data.session.user) : null;
-  }
+  // ---------- Sesión ----------
+  (async () => { const { data } = await sb.auth.getSession(); if (data.session) entrar(data.session.user); })();
 
   function entrar(user) {
     usuario = user;
-    $('vLogin').classList.add('hidden');
-    $('vPanel').classList.remove('hidden');
+    $('vLogin').classList.add('hidden'); $('vPanel').classList.remove('hidden');
     $('quien').textContent = 'Sesión: ' + user.email;
-    cargar();
+    cargarTodo();
   }
-
   $('fLogin').addEventListener('submit', async e => {
-    e.preventDefault();
-    $('btnLogin').disabled = true;
+    e.preventDefault(); $('btnLogin').disabled = true;
     const { data, error } = await sb.auth.signInWithPassword({ email: $('email').value.trim(), password: $('pass').value });
     $('btnLogin').disabled = false;
-    if (error) { $('msgLogin').className = 'msg show err'; $('msgLogin').textContent = 'Correo o contraseña incorrectos.'; return; }
+    if (error) return show($('msgLogin'), 'err', 'Correo o contraseña incorrectos.');
     entrar(data.user);
   });
-
   $('btnSalir').onclick = async () => { await sb.auth.signOut(); location.reload(); };
-  $('btnRefrescar').onclick = cargar;
-  $('buscar').oninput = pintar;
-  $('filtro').onchange = pintar;
 
-  async function cargar() {
-    const { data, error } = await sb.from('registros').select('*').order('creado_en', { ascending: false });
-    if (error) { alertaTabla('Error al cargar: ' + error.message); return; }
-    datos = data; pintar();
+  // ---------- Pestañas ----------
+  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+    ['tReg','tCap','tCur'].forEach(t => $(t).classList.toggle('hidden', t !== b.dataset.tab));
+  });
+
+  async function cargarTodo() { await Promise.all([cargarRegs(), cargarCaps(), cargarCurs()]); }
+
+  // ---------- Cursos registrados ----------
+  async function cargarRegs() {
+    const { data, error } = await sb.from('capacitaciones')
+      .select('*, capacitadores(nombre), participantes(dni,nombre)')
+      .order('creado_en', { ascending: false });
+    if (error) { $('tbReg').innerHTML = `<tr><td colspan="8">Error: ${esc(error.message)}</td></tr>`; return; }
+    regs = data; pintarRegs();
   }
 
-  function alertaTabla(t) { $('tbody').innerHTML = ''; $('vacio').textContent = t; $('vacio').classList.remove('hidden'); }
+  function pintarRegs() {
+    const q = $('buscar').value.trim().toUpperCase(), f = $('filtro').value;
+    const rec = regs.filter(r => r.recibido).length;
+    $('sTotal').textContent = regs.length; $('sRec').textContent = rec; $('sPend').textContent = regs.length - rec;
+    $('sPart').textContent = regs.reduce((a, r) => a + r.participantes.length, 0);
 
-  function pintar() {
-    const q = $('buscar').value.trim().toUpperCase();
-    const f = $('filtro').value;
-    const rec = datos.filter(r => r.recibido).length;
-    $('sTotal').textContent = datos.length; $('sRec').textContent = rec; $('sPend').textContent = datos.length - rec;
-
-    const lista = datos.filter(r =>
+    const lista = regs.filter(r =>
       (f === 'todos' || (f === 'rec' ? r.recibido : !r.recibido)) &&
-      (!q || r.dni.includes(q) || r.nombre.toUpperCase().includes(q) || r.empresa.toUpperCase().includes(q)));
+      (!q || r.curso_nombre.toUpperCase().includes(q) || r.dni_capacitador.includes(q) ||
+        (r.capacitadores?.nombre || '').toUpperCase().includes(q) || String(r.id) === q ||
+        r.participantes.some(p => p.dni.includes(q) || p.nombre.includes(q))));
 
-    $('vacio').textContent = 'Sin registros.';
-    $('vacio').classList.toggle('hidden', lista.length > 0);
-    $('tbody').innerHTML = lista.map(r => `
+    $('vacioReg').classList.toggle('hidden', lista.length > 0);
+    $('tbReg').innerHTML = lista.map(r => `
       <tr>
-        <td><b>${esc(r.dni)}</b></td>
-        <td>${esc(r.nombre)}</td>
-        <td>${esc(r.empresa)}</td>
-        <td class="muted">${fecha(r.creado_en)}</td>
+        <td><b>${r.id}</b></td>
+        <td>${fechaD(r.fecha)}</td>
+        <td>${esc(r.curso_nombre)}</td>
+        <td>${esc(r.capacitadores?.nombre || '')}<div class="muted">DNI ${esc(r.dni_capacitador)}</div></td>
+        <td><button class="linkbtn" data-act="ver" data-id="${r.id}">${r.participantes.length} ${abiertos.has(r.id) ? '▲' : '▼'}</button></td>
+        <td><button class="linkbtn" data-act="pdf" data-id="${r.id}">Ver PDF</button></td>
         <td>${r.recibido
-          ? `<span class="badge ok">Recibido</span><div class="muted">${fecha(r.recibido_en)}</div>`
+          ? `<span class="badge ok">Recibido</span><div class="muted">${fechaHora(r.recibido_en)}</div>`
           : `<span class="badge warn">Pendiente</span>`}</td>
         <td class="actions">${r.recibido
-          ? `<button class="ghost small" onclick="marcar(${r.id}, false)">Deshacer</button>`
-          : `<button class="ok small" onclick="marcar(${r.id}, true)">✔ Dar recibido</button>`}</td>
-      </tr>`).join('');
+          ? `<button class="ghost small" data-act="deshacer" data-id="${r.id}">Deshacer</button>`
+          : `<button class="ok small" data-act="recibir" data-id="${r.id}">✔ Dar recibido</button>`}</td>
+      </tr>
+      ${abiertos.has(r.id) ? `<tr class="detail"><td colspan="8">
+        <div class="plist-view">${r.participantes.map((p, i) => `<div>${i + 1}. <b>${esc(p.dni)}</b> — ${esc(p.nombre)}</div>`).join('')}</div>
+        <div class="muted" style="margin-top:8px">Registrado el ${fechaHora(r.creado_en)}${r.recibido_por ? ' · Recibido por ' + esc(r.recibido_por) : ''}</div>
+      </td></tr>` : ''}`).join('');
   }
 
-  async function marcar(id, valor) {
-    const cambios = valor
+  $('tbReg').addEventListener('click', async e => {
+    const b = e.target.closest('button[data-act]'); if (!b) return;
+    const id = Number(b.dataset.id), r = regs.find(x => x.id === id);
+    if (b.dataset.act === 'ver') { abiertos.has(id) ? abiertos.delete(id) : abiertos.add(id); return pintarRegs(); }
+    if (b.dataset.act === 'pdf') {
+      const w = window.open('', '_blank');
+      const { data, error } = await sb.storage.from('certificados').createSignedUrl(r.certificado_path, 600);
+      if (error) { w && w.close(); return alert('No se pudo abrir el certificado: ' + error.message); }
+      if (w) w.location = data.signedUrl; else location.href = data.signedUrl;
+      return;
+    }
+    const cambios = b.dataset.act === 'recibir'
       ? { recibido: true, recibido_en: new Date().toISOString(), recibido_por: usuario.email }
       : { recibido: false, recibido_en: null, recibido_por: null };
-    const { error } = await sb.from('registros').update(cambios).eq('id', id);
-    if (error) { alert('No se pudo actualizar: ' + error.message); return; }
-    Object.assign(datos.find(r => r.id === id), cambios);
-    pintar();
-  }
+    b.disabled = true;
+    const { error } = await sb.from('capacitaciones').update(cambios).eq('id', id);
+    if (error) { b.disabled = false; return alert('No se pudo actualizar: ' + error.message); }
+    Object.assign(r, cambios); pintarRegs();
+  });
+
+  $('buscar').oninput = pintarRegs; $('filtro').onchange = pintarRegs; $('btnRefrescar').onclick = cargarTodo;
 
   $('btnCsv').onclick = () => {
-    const filas = [['DNI','NOMBRE','EMPRESA','REGISTRADO','ESTADO','RECIBIDO_EN','RECIBIDO_POR']]
-      .concat(datos.map(r => [r.dni, r.nombre, r.empresa, fecha(r.creado_en), r.recibido ? 'RECIBIDO' : 'PENDIENTE', fecha(r.recibido_en), r.recibido_por || '']));
+    const filas = [['N_REGISTRO','FECHA_CURSO','CURSO','DNI_CAPACITADOR','CAPACITADOR','DNI_PARTICIPANTE','PARTICIPANTE','ESTADO','RECIBIDO_EN','RECIBIDO_POR']];
+    regs.forEach(r => r.participantes.forEach(p => filas.push([r.id, fechaD(r.fecha), r.curso_nombre, r.dni_capacitador, r.capacitadores?.nombre || '',
+      p.dni, p.nombre, r.recibido ? 'RECIBIDO' : 'PENDIENTE', fechaHora(r.recibido_en), r.recibido_por || ''])));
     const csv = '﻿' + filas.map(f => f.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    a.download = 'registros_' + new Date().toISOString().slice(0,10) + '.csv';
+    a.download = 'control_cursos_' + new Date().toISOString().slice(0, 10) + '.csv';
     a.click();
   };
 
-  init();
+  // ---------- Capacitadores ----------
+  async function cargarCaps() {
+    const { data } = await sb.from('capacitadores').select('*').order('nombre');
+    caps = data || [];
+    $('tbCap').innerHTML = caps.length ? caps.map(c => `
+      <tr><td><b>${esc(c.dni)}</b></td><td>${esc(c.nombre)}</td>
+        <td>${c.activo ? '<span class="badge ok">Autorizado</span>' : '<span class="badge warn">Bloqueado</span>'}</td>
+        <td class="actions"><button class="ghost small" data-dni="${esc(c.dni)}" data-on="${!c.activo}">${c.activo ? 'Bloquear' : 'Autorizar'}</button></td></tr>`).join('')
+      : '<tr><td colspan="4" class="muted">Aún no hay capacitadores. Agrega el primero arriba.</td></tr>';
+  }
+  $('capDni').addEventListener('input', e => e.target.value = e.target.value.replace(/\D/g, ''));
+  $('fCap').addEventListener('submit', async e => {
+    e.preventDefault();
+    const dni = $('capDni').value.trim(), nombre = $('capNom').value.trim().replace(/\s+/g, ' ').toUpperCase();
+    if (!/^\d{8}$/.test(dni)) return show($('msgCap'), 'err', 'El DNI debe tener 8 dígitos.');
+    if (nombre.length < 3) return show($('msgCap'), 'err', 'Ingresa el nombre completo.');
+    const { error } = await sb.from('capacitadores').upsert({ dni, nombre, activo: true });
+    if (error) return show($('msgCap'), 'err', esc(error.message));
+    show($('msgCap'), 'ok', `Autorizado: ${esc(dni)} — ${esc(nombre)}`);
+    $('fCap').reset(); cargarCaps();
+  });
+  $('tbCap').addEventListener('click', async e => {
+    const b = e.target.closest('button[data-dni]'); if (!b) return;
+    b.disabled = true;
+    await sb.from('capacitadores').update({ activo: b.dataset.on === 'true' }).eq('dni', b.dataset.dni);
+    cargarCaps();
+  });
+
+  // ---------- Lista de cursos ----------
+  async function cargarCurs() {
+    const { data } = await sb.from('cursos').select('*').order('nombre');
+    curs = data || [];
+    $('tbCur').innerHTML = curs.length ? curs.map(c => `
+      <tr><td>${esc(c.nombre)}</td>
+        <td>${c.activo ? '<span class="badge ok">Activo</span>' : '<span class="badge warn">Oculto</span>'}</td>
+        <td class="actions"><button class="ghost small" data-cid="${c.id}" data-on="${!c.activo}">${c.activo ? 'Ocultar' : 'Activar'}</button></td></tr>`).join('')
+      : '<tr><td colspan="3" class="muted">Aún no hay cursos. Agrega el primero arriba.</td></tr>';
+  }
+  $('fCur').addEventListener('submit', async e => {
+    e.preventDefault();
+    const nombre = $('curNom').value.trim().replace(/\s+/g, ' ').toUpperCase();
+    if (nombre.length < 2) return show($('msgCur'), 'err', 'Ingresa el nombre del curso.');
+    const { error } = await sb.from('cursos').insert({ nombre });
+    if (error) return show($('msgCur'), 'err', error.code === '23505' ? 'Ese curso ya existe.' : esc(error.message));
+    show($('msgCur'), 'ok', 'Curso agregado: ' + esc(nombre));
+    $('fCur').reset(); cargarCurs();
+  });
+  $('tbCur').addEventListener('click', async e => {
+    const b = e.target.closest('button[data-cid]'); if (!b) return;
+    b.disabled = true;
+    await sb.from('cursos').update({ activo: b.dataset.on === 'true' }).eq('id', Number(b.dataset.cid));
+    cargarCurs();
+  });
 </script>
 </body>
 </html>
