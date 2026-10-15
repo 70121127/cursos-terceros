@@ -25,6 +25,21 @@
       <button class="full" id="btnLogin" type="submit">Ingresar</button>
     </form>
     <div id="msgLogin" class="msg"></div>
+    <p style="text-align:center;margin:16px 0 0"><button class="linkbtn" id="btnOlvide" type="button">¿Olvidaste tu contraseña?</button></p>
+  </section>
+
+  <!-- NUEVA CONTRASEÑA (desde el enlace del correo) -->
+  <section class="card hidden" id="vNueva">
+    <h2>Crear nueva contraseña</h2>
+    <p class="sub">Escribe tu nueva contraseña (mínimo 8 caracteres) y guárdala en un lugar seguro.</p>
+    <form id="fNueva">
+      <label for="np1">Nueva contraseña</label>
+      <input id="np1" type="password" autocomplete="new-password" minlength="8" required>
+      <label for="np2">Repite la contraseña</label>
+      <input id="np2" type="password" autocomplete="new-password" minlength="8" required>
+      <button class="full" id="btnNueva" type="submit">Guardar contraseña</button>
+    </form>
+    <div id="msgNueva" class="msg"></div>
   </section>
 
   <!-- PANEL -->
@@ -110,7 +125,43 @@
   let regs = [], caps = [], curs = [], usuario = null, abiertos = new Set();
 
   // ---------- Sesión ----------
-  (async () => { const { data } = await sb.auth.getSession(); if (data.session) entrar(data.session.user); })();
+  let recuperando = /type=recovery/.test(location.hash);
+  function mostrarNueva() {
+    recuperando = true;
+    ['vLogin','vPanel'].forEach(id => $(id).classList.add('hidden'));
+    $('vNueva').classList.remove('hidden');
+  }
+  sb.auth.onAuthStateChange(ev => { if (ev === 'PASSWORD_RECOVERY') mostrarNueva(); });
+  (async () => {
+    const { data } = await sb.auth.getSession();
+    if (recuperando) return mostrarNueva();
+    if (data.session) entrar(data.session.user);
+  })();
+
+  $('btnOlvide').onclick = async () => {
+    const email = $('email').value.trim();
+    if (!/^\S+@\S+\.\S+$/.test(email)) return show($('msgLogin'), 'err', 'Escribe primero tu correo arriba y vuelve a dar clic en "¿Olvidaste tu contraseña?".');
+    $('btnOlvide').disabled = true;
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/admin.html' });
+    $('btnOlvide').disabled = false;
+    if (error) return show($('msgLogin'), 'err', 'No se pudo enviar el correo: ' + esc(error.message));
+    show($('msgLogin'), 'ok', 'Te enviamos un correo a <b>' + esc(email) + '</b>. Ábrelo y da clic en el enlace para crear tu nueva contraseña. Revisa también la carpeta de spam.');
+  };
+
+  $('fNueva').addEventListener('submit', async e => {
+    e.preventDefault();
+    const p1 = $('np1').value, p2 = $('np2').value;
+    if (p1.length < 8) return show($('msgNueva'), 'err', 'La contraseña debe tener al menos 8 caracteres.');
+    if (p1 !== p2) return show($('msgNueva'), 'err', 'Las contraseñas no coinciden.');
+    $('btnNueva').disabled = true;
+    const { data, error } = await sb.auth.updateUser({ password: p1 });
+    $('btnNueva').disabled = false;
+    if (error) return show($('msgNueva'), 'err', 'No se pudo cambiar: ' + esc(error.message) + '. Pide un nuevo correo de recuperación.');
+    history.replaceState(null, '', location.pathname);
+    recuperando = false;
+    $('vNueva').classList.add('hidden');
+    entrar(data.user);
+  });
 
   function entrar(user) {
     usuario = user;
